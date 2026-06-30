@@ -3,8 +3,12 @@ import json
 import urllib.request
 import urllib.parse
 
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-BARK_URL = os.environ["BARK_URL"]
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"].strip()
+BARK_URL = os.environ["BARK_URL"].strip()
+
+# 调试信息:不会泄露密钥本身,只显示长度和开头几位,帮助排查Secret是否填错
+print(f"[调试] ANTHROPIC_API_KEY 长度: {len(ANTHROPIC_API_KEY)}, 开头: {ANTHROPIC_API_KEY[:12]}...")
+print(f"[调试] BARK_URL 长度: {len(BARK_URL)}, 内容: {BARK_URL}")
 
 # 在这里维护你的待办事项,每天手动改这个列表即可
 TODO_LIST = [
@@ -49,8 +53,13 @@ def call_claude():
 
 
 def push_to_bark(title, content):
-    url = f"{BARK_URL}/{urllib.parse.quote(title)}/{urllib.parse.quote(content)}"
-    req = urllib.request.Request(url, method="GET")
+    payload = json.dumps({"title": title, "body": content}).encode("utf-8")
+    req = urllib.request.Request(
+        BARK_URL,
+        data=payload,
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        method="POST",
+    )
     with urllib.request.urlopen(req) as resp:
         print("Bark response:", resp.read().decode("utf-8"))
 
