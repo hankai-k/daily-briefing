@@ -60,4 +60,3 @@ if __name__ == "__main__":
     print("=== 简报内容 ===")
     print(briefing_text)
     push_to_bark("今日简报", briefing_text)
-
