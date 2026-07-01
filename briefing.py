@@ -1,48 +1,52 @@
 import os
 import json
 import urllib.request
-import urllib.parse
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"].strip()
 BARK_URL = os.environ["BARK_URL"].strip()
 
-# 调试信息:不会泄露密钥本身,只显示长度和开头几位,帮助排查Secret是否填错
-print(f"[调试] ANTHROPIC_API_KEY 长度: {len(ANTHROPIC_API_KEY)}, 开头: {ANTHROPIC_API_KEY[:12]}...")
-print(f"[调试] BARK_URL 长度: {len(BARK_URL)}, 内容: {BARK_URL}")
-
-# 在这里维护你的待办事项,每天手动改这个列表即可
+# 待辦事項リスト(中国語や他の言語で入力してもOK、日本語に翻訳されます)
 TODO_LIST = [
-    "示例:回复客户邮件",
-    "示例:下午3点开会",
+    "例:メールの返信",
+    "例:午後3時にミーティング",
 ]
 
 def call_claude():
-    prompt = f"""请用简洁的中文生成一份"今日简报",内容包括以下几个部分,严格按顺序:
+    prompt = f"""あなたは日本語学習者向けの毎日ブリーフィングを作成するアシスタントです。
+以下の内容を含む「今日のブリーフィング」を日本語で作成してください。
 
-1. 新闻摘要(请尽量引用海外/国际媒体如路透社、彭博社、CNN、BBC、日本经济新闻等的报道角度,而非国内媒体):
-   - 中国相关重要新闻 3条
-   - 日本相关重要新闻 3条
-   - 世界/国际重要新闻 2条
+重要なルール:
+- 全文を日本語で書くこと
+- 全ての漢字に読み仮名を括弧でつけること。例:「新聞(しんぶん)」「東京(とうきょう)」
+- 記号やマークダウンは使わないこと(*、#など不要)
+- 待辦事項が中国語や他の言語で書かれていても必ず日本語に翻訳すること
+- 全体の長さは1000文字以内にすること
 
-2. 市场摘要:
-   - 今天日本股市(日经225、东证指数)开盘情况
-   - 昨夜美股(道琼斯、纳斯达克、标普500)收盘表现
-   - 具体提到几只明显上涨或下跌的重点个股或板块
+内容の順番:
 
-3. 天气:东京都新宿区今天的天气情况(温度、降水概率)
+1. ニュース(海外メディア=ロイター、ブルームバーグ、CNN、BBC、日本経済新聞などの視点を優先):
+   - 中国関連の重要ニュース 3件
+   - 日本関連の重要ニュース 3件
+   - 国際ニュース 2件
 
-4. 汇率:
-   - 日元兑美元(USD/JPY)当前汇率
-   - 日元兑人民币(CNY/JPY)当前汇率
+2. 市場まとめ:
+   - 今日の日本株式市場(日経225、東証指数)の寄り付き状況
+   - 昨夜の米国株式市場(ダウ、ナスダック、S&P500)の終値
+   - 上昇または下落した主要銘柄やセクターも具体的に記載
 
-5. 结合以下todo清单,列出今日待办事项:
+3. 天気:東京都新宿区の今日の天気(気温、降水確率)
+
+4. 為替:
+   - 米ドル円(USD/JPY)の現在レート
+   - 人民元円(CNY/JPY)の現在レート
+
+5. 本日のToDo(以下のリストを日本語に翻訳して表示):
 {json.dumps(TODO_LIST, ensure_ascii=False)}
-
-请用纯文本格式输出,不要用markdown符号(不要*号、#号等),分段落即可,总长度控制在800字以内,适合手机推送通知阅读。"""
+"""
 
     body = json.dumps({
         "model": "claude-sonnet-4-6",
-        "max_tokens": 2200,
+        "max_tokens": 3000,
         "messages": [{"role": "user", "content": prompt}],
         "tools": [{"type": "web_search_20250305", "name": "web_search"}]
     }).encode("utf-8")
@@ -61,7 +65,10 @@ def call_claude():
         data = json.loads(resp.read().decode("utf-8"))
 
     text_parts = [block["text"] for block in data["content"] if block.get("type") == "text"]
-    return "\n".join(text_parts).strip()
+    result = "\n".join(text_parts).strip()
+    if not result:
+        result = "ブリーフィングの生成に失敗しました。ログを確認してください。"
+    return result
 
 
 def push_to_bark(title, content):
@@ -78,6 +85,6 @@ def push_to_bark(title, content):
 
 if __name__ == "__main__":
     briefing_text = call_claude()
-    print("=== 简报内容 ===")
+    print("=== ブリーフィング内容 ===")
     print(briefing_text)
-    push_to_bark("今日简报", briefing_text)
+    push_to_bark("今日(きょう)のブリーフィング", briefing_text)
