@@ -4,6 +4,7 @@ import urllib.request
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"].strip()
 BARK_URL = os.environ["BARK_URL"].strip()
+BARK_URL_FRIEND = os.environ["BARK_URL_FRIEND"].strip()
 
 TODO_LIST = [
     "例:メールの返信",
@@ -19,7 +20,7 @@ def call_claude():
    - 日本(にほん)関連(かんれん) 2件(けん)
    - 国際(こくさい) 2件(けん)
 
-2. 天気(てんき)(簡潔(かんけつ)に):東京都(とうきょうと)新宿区(しんじゅくく)、気温(きおん)と降水確率(こうすいかくりつ)のみ
+2. 天気(てんき)(簡潔(かんけつ)に):東京都(とうきょうと)新宿区(しんじゅくく)、気温(きおん)と降水確率(こうすいかくりつ)
 
 3. 為替(かわせ)(簡潔(かんけつ)に):USD/JPY・CNY/JPYの現在(げんざい)レート
 
@@ -28,8 +29,9 @@ def call_claude():
    - 米国株(べいこくかぶ)(ダウ・ナスダック・S&P500)の昨夜(さくや)終値(おわりね)(数値(すうち)・騰落率(とうらくりつ))
    - 上昇(じょうしょう)・下落(げらく)した主要(しゅよう)銘柄(めいがら)やセクターを具体的(ぐたいてき)に3〜5件(けん)
 
-5. ToDo(日本語(にほんご)に翻訳(ほんやく)):
-{todo_str}"""
+5. ToDo【TODO_START】
+{todo_str}
+【TODO_END】"""
 
     body = json.dumps({
         "model": "claude-sonnet-4-6",
@@ -52,16 +54,19 @@ def call_claude():
         data = json.loads(resp.read().decode("utf-8"))
 
     text_parts = [block["text"] for block in data["content"] if block.get("type") == "text"]
-    result = "\n".join(text_parts).strip()
-    if not result:
-        result = "ブリーフィングの生成に失敗しました。"
-    return result
+    return "\n".join(text_parts).strip()
 
 
-def push_to_bark(title, content):
+def remove_todo(text):
+    # 去掉【TODO_START】到【TODO_END】之间的内容
+    import re
+    return re.sub(r'【TODO_START】.*?【TODO_END】', '', text, flags=re.DOTALL).strip()
+
+
+def push_to_bark(url, title, content):
     payload = json.dumps({"title": title, "body": content}).encode("utf-8")
     req = urllib.request.Request(
-        BARK_URL,
+        url,
         data=payload,
         headers={"Content-Type": "application/json; charset=utf-8"},
         method="POST",
@@ -71,7 +76,16 @@ def push_to_bark(title, content):
 
 
 if __name__ == "__main__":
-    briefing_text = call_claude()
-    print("=== ブリーフィング ===")
-    print(briefing_text)
-    push_to_bark("今日(きょう)のブリーフィング", briefing_text)
+    briefing = call_claude()
+
+    if not briefing:
+        briefing = "ブリーフィングの生成に失敗しました。"
+
+    # 你的简报(含Todo)
+    push_to_bark(BARK_URL, "今日(きょう)のブリーフィング", briefing)
+    print("自分に送信完了")
+
+    # 朋友的简报(去掉Todo)
+    briefing_friend = remove_todo(briefing)
+    push_to_bark(BARK_URL_FRIEND, "今日(きょう)のブリーフィング", briefing_friend)
+    print("友達に送信完了")
