@@ -14,8 +14,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Run briefing script
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BARK_URL: ${{ secrets.BARK_URL }}
+       env:
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  BARK_URL: ${{ secrets.BARK_URL }}
+  BARK_URL_FRIEND: ${{ secrets.BARK_URL_FRIEND }}
         run: python briefing.py
 
