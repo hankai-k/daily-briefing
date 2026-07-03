@@ -35,7 +35,7 @@ def get_todos():
             if not date_str or not item_str:
                 continue
             try:
-                for fmt in ["%Y/%m/%d", "%Y-%m-%d", "%m/%d/%Y"]:
+                for fmt in ["%Y/%m/%d", "%Y-%m-%d", "%m/%d/%Y", "%m月%d日", "%Y年%m月%d日"]:
                     try:
                         task_date = datetime.strptime(date_str, fmt).date()
                         break
