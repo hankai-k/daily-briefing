@@ -3,6 +3,7 @@ import json
 import urllib.request
 import csv
 import io
+import re
 from datetime import datetime, timedelta, timezone
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"].strip()
@@ -41,9 +42,9 @@ def get_todos():
                     except:
                         continue
                 if task_date == today:
-                    today_todos.append(f"本日: {item_str}")
+                    today_todos.append(f"本日(ほんじつ): {item_str}")
                 elif task_date == tomorrow:
-                    tomorrow_todos.append(f"明日: {item_str}")
+                    tomorrow_todos.append(f"明日(あした): {item_str}")
             except:
                 continue
         return today_todos + tomorrow_todos
@@ -52,31 +53,40 @@ def get_todos():
         return []
 
 
+def clean(text):
+    text = re.sub(r'#{1,6}\s*', '', text)
+    text = re.sub(r'\*{1,2}', '', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def call_claude(todos):
     if todos:
-        todo_str = "、".join(todos)
+        todo_str = "\n".join(todos)
     else:
         todo_str = "なし"
 
-    prompt = f"""以下の形式で今日のブリーフィングを日本語で作成してください。
+    prompt = f"""今日(きょう)のブリーフィングを日本語(にほんご)で作成(さくせい)してください。
+厳守(げんしゅ)ルール:
+- ###/**/#などの記号(きごう)は絶対(ぜったい)に使(つか)わない
+- 余分(よぶん)な空行(くうぎょう)なし
+- 漢字(かんじ)には読(よ)み仮名(がな)を括弧(かっこ)でつける
+- 全体(ぜんたい)600文字(もじ)以内(いない)
 
-絶対に守るルール:
-- ###、**、#などの記号は一切使わない
-- 改行は各項目の間だけ、余分な空行は入れない
-- 株式(かぶしき)市場(しじょう)以外は一文(いちぶん)のみ
-- 株式市場のみ詳しく書く
-- 漢字には読み仮名を括弧でつける(例:新聞(しんぶん))
+以下(いか)の順番(じゅんばん)で出力(しゅつりょく):
 
-出力形式(この順番通りに):
-ニュース: 中国(ちゅうごく)[15字以内], 日本(にほん)[15字以内x2], 国際(こくさい)[15字以内x2]
-天気(てんき): 新宿区(しんじゅくく)の気温(きおん)と降水確率(こうすいかくりつ)を一文で
-為替(かわせ): USD/JPYとCNY/JPYを一文で
-株式(かぶしき)市場(しじょう): 日経(にっけい)225と東証(とうしょう)の寄(よ)り付(つ)き、米国株(べいこくかぶ)の昨夜(さくや)終値(おわりね)、主要(しゅよう)銘柄(めいがら)3〜5件(けん)の動(うご)きを詳(くわ)しく
-ToDo: {todo_str}"""
+ToDo:
+{todo_str}
+
+ニュース(各(かく)10字(じ)以内(いない)):中国(ちゅうごく)1件(けん)、日本(にほん)2件(けん)、国際(こくさい)2件(けん)
+
+天気(てんき)/為替(かわせ): 新宿区(しんじゅくく)気温(きおん)・降水(こうすい)%、USD/JPY・CNY/JPY(全部(ぜんぶ)一文(いちぶん))
+
+株式(かぶしき)市場(しじょう)(簡潔(かんけつ)に3〜4文(ぶん)):日経(にっけい)・東証(とうしょう)寄(よ)り付(つ)き、米国株(べいこくかぶ)終値(おわりね)、主要(しゅよう)銘柄(めいがら)2〜3件(けん)"""
 
     body = json.dumps({
         "model": "claude-sonnet-4-6",
-        "max_tokens": 1500,
+        "max_tokens": 1000,
         "messages": [{"role": "user", "content": prompt}],
         "tools": [{"type": "web_search_20250305", "name": "web_search"}]
     }).encode("utf-8")
@@ -95,20 +105,12 @@ ToDo: {todo_str}"""
         data = json.loads(resp.read().decode("utf-8"))
 
     text_parts = [block["text"] for block in data["content"] if block.get("type") == "text"]
-    result = "\n".join(text_parts).strip()
-    # 强制清除多余符号和空行
-    import re
-    result = re.sub(r'#{1,6}\s*', '', result)
-    result = re.sub(r'\*{1,2}', '', result)
-    result = re.sub(r'\n{3,}', '\n\n', result)
-    if not result:
-        result = "ブリーフィングの生成に失敗しました。"
-    return result
+    return clean("\n".join(text_parts))
 
 
 def remove_todo(text):
     lines = text.split("\n")
-    result = [l for l in lines if "ToDo" not in l and "本日:" not in l and "明日:" not in l]
+    result = [l for l in lines if "ToDo" not in l and "本日:" not in l and "明日:" not in l and "本日(ほんじつ)" not in l and "明日(あした)" not in l]
     return "\n".join(result).strip()
 
 
