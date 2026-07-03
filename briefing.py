@@ -15,18 +15,14 @@ def get_todos():
     JST = timezone(timedelta(hours=9))
     today = datetime.now(JST).date()
     tomorrow = today + timedelta(days=1)
-
     try:
         req = urllib.request.Request(SHEET_CSV_URL)
         with urllib.request.urlopen(req) as resp:
             content = resp.read().decode("utf-8")
-
         reader = csv.DictReader(io.StringIO(content))
         today_todos = []
         tomorrow_todos = []
-
         for row in reader:
-            # 获取日期和事项内容(自动匹配列名)
             date_str = None
             item_str = None
             for key, val in row.items():
@@ -35,28 +31,22 @@ def get_todos():
                     date_str = val.strip()
                 elif "内容" in k or "todo" in k or "事項" in k or "事项" in k or "content" in k:
                     item_str = val.strip()
-
             if not date_str or not item_str:
                 continue
-
             try:
-                # 支持多种日期格式
                 for fmt in ["%Y/%m/%d", "%Y-%m-%d", "%m/%d/%Y"]:
                     try:
                         task_date = datetime.strptime(date_str, fmt).date()
                         break
                     except:
                         continue
-
                 if task_date == today:
-                    today_todos.append(f"本日(ほんじつ): {item_str}")
+                    today_todos.append(f"本日: {item_str}")
                 elif task_date == tomorrow:
-                    tomorrow_todos.append(f"明日(あした): {item_str}")
+                    tomorrow_todos.append(f"明日: {item_str}")
             except:
                 continue
-
         return today_todos + tomorrow_todos
-
     except Exception as e:
         print(f"表格读取失败: {e}")
         return []
@@ -64,26 +54,25 @@ def get_todos():
 
 def call_claude(todos):
     if todos:
-        todo_str = "\n".join(f"- {t}" for t in todos)
-        todo_section = f"\n5. ToDo(日本語(にほんご)に翻訳(ほんやく)):\n{todo_str}"
+        todo_str = "、".join(todos)
     else:
-        todo_section = "\n5. ToDo: 本日(ほんじつ)・明日(あした)の予定(よてい)はありません"
+        todo_str = "なし"
 
-    prompt = f"""以下の内容を日本語でまとめてください。全ての漢字に読み仮名を括弧でつけること(例:新聞(しんぶん))。記号不要。必ず全ての項目を含めること。
+    prompt = f"""以下の形式で今日のブリーフィングを日本語で作成してください。
 
-1. ニュース(各(かく)15文字(もじ)以内(いない)、一言(ひとこと)のみ、読み仮名(よみがな)不要(ふよう)):
-   - 中国(ちゅうごく)関連(かんれん) 1件(けん)
-   - 日本(にほん)関連(かんれん) 2件(けん)
-   - 国際(こくさい) 2件(けん)
+絶対に守るルール:
+- ###、**、#などの記号は一切使わない
+- 改行は各項目の間だけ、余分な空行は入れない
+- 株式(かぶしき)市場(しじょう)以外は一文(いちぶん)のみ
+- 株式市場のみ詳しく書く
+- 漢字には読み仮名を括弧でつける(例:新聞(しんぶん))
 
-2. 天気(てんき)(簡潔(かんけつ)に):東京都(とうきょうと)新宿区(しんじゅくく)、気温(きおん)と降水確率(こうすいかくりつ)
-
-3. 為替(かわせ)(簡潔(かんけつ)に):USD/JPY・CNY/JPYの現在(げんざい)レート
-
-4. 市場(しじょう)(詳細(しょうさい)に):
-   - 日経(にっけい)225・東証(とうしょう)指数(しすう)の本日(ほんじつ)寄(よ)り付(つ)き(数値(すうち)・騰落率(とうらくりつ))
-   - 米国株(べいこくかぶ)(ダウ・ナスダック・S&P500)の昨夜(さくや)終値(おわりね)(数値(すうち)・騰落率(とうらくりつ))
-   - 上昇(じょうしょう)・下落(げらく)した主要(しゅよう)銘柄(めいがら)やセクターを具体的(ぐたいてき)に3〜5件(けん){todo_section}"""
+出力形式(この順番通りに):
+ニュース: 中国(ちゅうごく)[15字以内], 日本(にほん)[15字以内x2], 国際(こくさい)[15字以内x2]
+天気(てんき): 新宿区(しんじゅくく)の気温(きおん)と降水確率(こうすいかくりつ)を一文で
+為替(かわせ): USD/JPYとCNY/JPYを一文で
+株式(かぶしき)市場(しじょう): 日経(にっけい)225と東証(とうしょう)の寄(よ)り付(つ)き、米国株(べいこくかぶ)の昨夜(さくや)終値(おわりね)、主要(しゅよう)銘柄(めいがら)3〜5件(けん)の動(うご)きを詳(くわ)しく
+ToDo: {todo_str}"""
 
     body = json.dumps({
         "model": "claude-sonnet-4-6",
@@ -107,6 +96,11 @@ def call_claude(todos):
 
     text_parts = [block["text"] for block in data["content"] if block.get("type") == "text"]
     result = "\n".join(text_parts).strip()
+    # 强制清除多余符号和空行
+    import re
+    result = re.sub(r'#{1,6}\s*', '', result)
+    result = re.sub(r'\*{1,2}', '', result)
+    result = re.sub(r'\n{3,}', '\n\n', result)
     if not result:
         result = "ブリーフィングの生成に失敗しました。"
     return result
@@ -114,13 +108,7 @@ def call_claude(todos):
 
 def remove_todo(text):
     lines = text.split("\n")
-    result = []
-    skip = False
-    for line in lines:
-        if "ToDo" in line or "本日・明日" in line or "本日(ほんじつ):" in line or "明日(あした):" in line:
-            skip = True
-        if not skip:
-            result.append(line)
+    result = [l for l in lines if "ToDo" not in l and "本日:" not in l and "明日:" not in l]
     return "\n".join(result).strip()
 
 
@@ -138,15 +126,12 @@ def push_to_bark(url, title, content):
 
 if __name__ == "__main__":
     todos = get_todos()
-    print(f"今日・明日のTodo: {todos}")
-
+    print(f"Todo: {todos}")
     briefing = call_claude(todos)
     print("=== ブリーフィング ===")
     print(briefing)
-
     push_to_bark(BARK_URL, "今日(きょう)のブリーフィング", briefing)
     print("自分に送信完了")
-
     briefing_friend = remove_todo(briefing)
     push_to_bark(BARK_URL_FRIEND, "今日(きょう)のブリーフィング", briefing_friend)
     print("友達に送信完了")
