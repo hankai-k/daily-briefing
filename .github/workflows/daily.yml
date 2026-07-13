@@ -1,27 +1,19 @@
 name: Daily Briefing
 
 on:
-  schedule:
-    # UTC时间00:35 = 日本时间09:35
-    - cron: '35 0 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   send-briefing:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Run briefing script
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BARK_URL: ${{ secrets.BARK_URL }}
           BARK_URL_FRIEND: ${{ secrets.BARK_URL_FRIEND }}
         run: python briefing.py
-
